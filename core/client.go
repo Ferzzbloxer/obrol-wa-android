@@ -2,11 +2,7 @@ package obrolcore
 
 import (
 	"context"
-	"database/sql"
-	"errors"
-	"fmt"
 	"path/filepath"
-	"strings"
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -161,8 +157,12 @@ func (c *Client) handleEvent(raw any) {
 		c.listener.OnNewMessage(chat, id, sender, text, fromMe, ts, kind)
 
 	case *events.Receipt:
+		status := 1 // delivered
+		if evt.Type == types.ReceiptTypeRead || evt.Type == types.ReceiptTypePlayed {
+			status = 2 // read
+		}
 		for _, mid := range evt.MessageIDs {
-			c.listener.OnReceipt(evt.Chat.String(), mid, int(evt.Type))
+			c.listener.OnReceipt(evt.Chat.String(), mid, status)
 		}
 	case *events.CallOffer:
 		c.listener.OnCall(evt.From.String(), false, "offer")
