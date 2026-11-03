@@ -31,40 +31,36 @@ jobs:
       # 3. Compile Go Mobile AAR
       - name: Build Go Mobile AAR
         run: |
-          # Install Go mobile tools globally
           go install golang.org/x/mobile/cmd/gomobile@latest
           go install golang.org/x/mobile/cmd/gobind@latest
           export PATH=$PATH:$(go env GOPATH)/bin
           gomobile init
 
-          # Select a stable pre-installed NDK (NDK 26 or 25 instead of 30)
+          # Detect stable NDK
           if [ -d "$ANDROID_HOME/ndk/26.1.10909125" ]; then
             export ANDROID_NDK_HOME=$ANDROID_HOME/ndk/26.1.10909125
           else
             export ANDROID_NDK_HOME=$(find $ANDROID_HOME/ndk -maxdepth 1 -name "26.*" -o -name "25.*" | sort -V | tail -n 1)
           fi
-          echo "Using stable Android NDK: $ANDROID_NDK_HOME"
+          echo "Using Android NDK: $ANDROID_NDK_HOME"
 
-          # Prepare output folder
           mkdir -p android/app/libs
 
-          # Ensure mobile dependency is locked into the module
           cd core
           go get go.mau.fi/whatsmeow@latest
           go get golang.org/x/mobile@latest
           go get -tool golang.org/x/mobile/cmd/gobind || true
           go mod tidy
-
-          # Compile the .aar
           gomobile bind -target=android -androidapi 26 -o ../android/app/libs/obrolcore.aar .
           cd ..
 
-      # 4. Build Android APK with Gradle
+      # 4. Build Android APK using Gradle 8.5
       - name: Build Android APK with Gradle
         run: |
           cd android
+          # Pin Gradle wrapper to 8.5 (compatible with AGP 8.2.2)
           if [ ! -f gradlew ]; then
-            gradle wrapper
+            gradle wrapper --gradle-version 8.5
           fi
           chmod +x gradlew
           ./gradlew assembleDebug --stacktrace
