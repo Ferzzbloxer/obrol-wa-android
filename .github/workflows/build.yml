@@ -2,10 +2,10 @@ name: Build Android APK
 
 on:
   push:
-    branches: [ "main", "master" ]
+    branches: [ "android" ]
   pull_request:
-    branches: [ "main", "master" ]
-  workflow_dispatch: # Allows manual trigger from the GitHub web UI
+    branches: [ "android" ]
+  workflow_dispatch: # Allows manual trigger from the Actions tab
 
 jobs:
   build:
@@ -22,49 +22,41 @@ jobs:
           go-version: '1.22'
           cache-dependency-path: core/go.sum
 
-      # 2. Setup Java for Android Gradle
+      # 2. Setup Java
       - name: Setup Java 17
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
 
-      # 3. Setup Android SDK & NDK
-      - name: Setup Android SDK & NDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install Android NDK
-        run: |
-          sdkmanager --install "ndk;26.1.10909125"
-
-      # 4. Install gomobile & compile obrolcore.aar
+      # 3. Locate Pre-installed NDK & Build Go Mobile AAR
       - name: Build Go Mobile AAR
         run: |
-          # Install Go mobile tooling
+          # Install Go mobile tools
           go install golang.org/x/mobile/cmd/gomobile@latest
           go install golang.org/x/mobile/cmd/gobind@latest
           export PATH=$PATH:$(go env GOPATH)/bin
-          
-          # Initialize gomobile
+
           gomobile init
-          
-          # Set NDK path
-          export ANDROID_NDK_HOME=$ANDROID_HOME/ndk/26.1.10909125
-          
-          # Create target libs directory
+
+          # Detect the pre-installed Android NDK on GitHub's runner
+          export ANDROID_NDK_HOME=$(find $ANDROID_HOME/ndk -maxdepth 1 -mindepth 1 | sort -V | tail -n 1)
+          echo "Using Android NDK located at: $ANDROID_NDK_HOME"
+
+          # Prepare output folder
           mkdir -p android/app/libs
-          
-          # Build .aar
+
+          # Compile the .aar
           cd core
           go mod tidy
           gomobile bind -target=android -androidapi 26 -o ../android/app/libs/obrolcore.aar .
           cd ..
 
-      # 5. Build Android APK
-      - name: Build Android APK with Gradle
+      # 4. Build Android APK with Gradle
+      - name: Build Android APK
         run: |
           cd android
-          # Generate Gradle wrapper if not checked into Git
+          # Create Gradle wrapper if not present
           if [ ! -f gradlew ]; then
             gradle wrapper
           fi
@@ -72,7 +64,7 @@ jobs:
           ./gradlew assembleDebug --stacktrace
           cd ..
 
-      # 6. Upload APK as Artifact
+      # 5. Upload APK as Artifact
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
@@ -80,8 +72,8 @@ jobs:
           path: android/app/build/outputs/apk/debug/*.apk
           retention-days: 7
 
-      # 7. (Optional) Upload AAR as backup
-      - name: Upload AAR Core
+      # 6. Upload AAR as backup
+      - name: Upload AAR
         uses: actions/upload-artifact@v4
         with:
           name: obrolcore-aar
